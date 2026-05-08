@@ -1,6 +1,7 @@
 # huntHeaders/cli.py
 
 import argparse
+import sys
 from huntHeaders.utils import (
     print_banner, print_target_info, get_headers,
     analyze_headers, print_summary, print_full, print_detail,
@@ -10,7 +11,7 @@ from huntHeaders.utils import (
 from huntHeaders.constants import COLORS, DEFAULT_TIMEOUT
 
 
-def main() -> None:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Analyze security headers of a URL.",
         formatter_class=argparse.RawTextHelpFormatter
@@ -26,66 +27,86 @@ def main() -> None:
                         help=f'Request timeout in seconds (default: {DEFAULT_TIMEOUT})')
     parser.add_argument('--proxy', metavar='URL',
                         help='Proxy URL, e.g., http://127.0.0.1:8080')
+
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument('--full', action='store_true',
                             help='Show all headers with full values and references')
     mode_group.add_argument('--detail', metavar='HEADER',
-                            help='Show full detail for a single header, e.g., --detail Content-Security-Policy')
-    # Export options
+                            help='Show full detail for a single header')
+
     parser.add_argument('--output', metavar='FILE',
-                        help='Save output to a plain text file, e.g., --output results.txt')
+                        help='Save output to a plain text file')
     parser.add_argument('--json', metavar='FILE',
-                        help='Export results to JSON file, e.g., --json results.json')
+                        help='Export results to JSON file')
 
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+def build_session_kwargs(args: argparse.Namespace) -> dict:
     custom_headers = parse_headers(args.header)
-    cookies = parse_cookies(args.cookie) if args.cookie else None
-    proxies = {"http": args.proxy, "https": args.proxy} if args.proxy else None
-    url = normalize_url(args.url)
+    cookies        = parse_cookies(args.cookie) if args.cookie else None
+    proxies        = {"http": args.proxy, "https": args.proxy} if args.proxy else None
 
+    return {
+        "custom_headers": custom_headers,
+        "cookies":        cookies,
+        "verify_ssl":     args.verify_ssl,
+        "timeout":        args.timeout,
+        "proxies":        proxies,
+    }
+
+
+def main() -> None:
     print_banner()
+
+    args = parse_args()
+    url  = normalize_url(args.url)
+
     print_target_info(url)
 
-    headers, status_code, final_url = get_headers(
-        url, custom_headers, cookies,
-        verify_ssl=args.verify_ssl,
-        timeout=args.timeout,
-        proxies=proxies
-    )
-    if headers is None:
-        return
+    try:
+        session_kwargs = build_session_kwargs(args)
 
-    print(f"{COLORS['green']}[INFO]{COLORS['reset']} Effective URL: {final_url}")
-    print(f"{COLORS['green']}[INFO]{COLORS['reset']} Status Code:   {status_code}")
-    print("=" * 120)
-    print()
+        headers, status_code, final_url = get_headers(url, **session_kwargs)
+        if headers is None:
+            return
 
-    results = analyze_headers(headers)
+        print(f"{COLORS['green']}[INFO]{COLORS['reset']} Effective URL: {final_url}")
+        print(f"{COLORS['green']}[INFO]{COLORS['reset']} Status Code:   {status_code}")
+        print("=" * 120)
+        print()
 
-    if args.full:
-        print_full(results)
-    elif args.detail:
-        print_detail(results, args.detail)
-    else:
-        print_summary(results)
+        results = analyze_headers(headers)
 
-    print()
-    print("=" * 120)
-    implemented_count, misconfigured_count, deprecated_count, missing_count = get_summary(results)
-    print(f"\n{COLORS['bold']}[RESULTS]{COLORS['reset']} {url}")
-    print(f"  {COLORS['green']}[+]{COLORS['reset']} {implemented_count} security headers implemented correctly")
-    print(f"  {COLORS['yellow']}[-]{COLORS['reset']} {misconfigured_count} headers present but misconfigured")
-    print(f"  {COLORS['yellow']}[-]{COLORS['reset']} {deprecated_count} deprecated headers detected")
-    print(f"  {COLORS['red']}[!]{COLORS['reset']} {missing_count} headers missing\n")
+        if args.full:
+            print_full(results)
+        elif args.detail:
+            print_detail(results, args.detail)
+        else:
+            print_summary(results)
 
-    if args.output:
-        export_txt(args.output, url, results, implemented_count, misconfigured_count, deprecated_count, missing_count)
-        print(f"{COLORS['green']}[INFO]{COLORS['reset']} Output saved to {args.output}")
+        print()
+        print("=" * 120)
 
-    if args.json:
-        export_json(args.json, url, results, implemented_count, misconfigured_count, deprecated_count, missing_count)
-        print(f"{COLORS['green']}[INFO]{COLORS['reset']} JSON saved to {args.json}")
+        implemented_count, misconfigured_count, deprecated_count, missing_count = get_summary(results)
+
+        print(f"\n{COLORS['bold']}[RESULTS]{COLORS['reset']} {url}")
+        print(f"  {COLORS['green']}[+]{COLORS['reset']} {implemented_count} security headers implemented correctly")
+        print(f"  {COLORS['yellow']}[-]{COLORS['reset']} {misconfigured_count} headers present but misconfigured")
+        print(f"  {COLORS['yellow']}[-]{COLORS['reset']} {deprecated_count} deprecated headers detected")
+        print(f"  {COLORS['red']}[!]{COLORS['reset']} {missing_count} headers missing\n")
+
+        if args.output:
+            export_txt(args.output, url, results, implemented_count, misconfigured_count, deprecated_count, missing_count)
+            print(f"{COLORS['green']}[INFO]{COLORS['reset']} Output saved to {args.output}")
+
+        if args.json:
+            export_json(args.json, url, results, implemented_count, misconfigured_count, deprecated_count, missing_count)
+            print(f"{COLORS['green']}[INFO]{COLORS['reset']} JSON saved to {args.json}")
+
+    except KeyboardInterrupt:
+        print(f"\n\n{COLORS['red']}[!]{COLORS['reset']} Scan interrupted by user.")
+        sys.exit(0)
 
 
 if __name__ == "__main__":

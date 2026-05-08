@@ -2,6 +2,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)
 ![License](https://img.shields.io/badge/license-GPLv3-green?style=flat-square)
+![Version](https://img.shields.io/badge/version-2.3-orange?style=flat-square)
 
 > CLI tool to analyze HTTP security headers of a target URL.  
 > Detects missing, misconfigured, and deprecated headers based on OWASP recommendations.
@@ -95,6 +96,21 @@ Every header with its full value, recommended values, and OWASP reference link.
 Deep dive into a single header — full value, recommended values, and reference.
 
 ![detailed mode](https://raw.githubusercontent.com/xHuntr3ss/xHuntr3ss-assets/refs/heads/main/huntHeaders/huntHeaders-detailed-mode.png)
+---
+
+## Changelog
+
+### v2.2
+- Refactored `analyze_headers()` to separate semantic status (`implemented`, `misconfigured`, `deprecated`, `missing`) from ANSI display — cleaner architecture.
+- Fixed `export_json()` to include proper `status` field per header in JSON output
+- JSON export now outputs compact format instead of pretty-print
+- Extracted `parse_args()` as standalone function for cleaner separation of concerns
+- Added `build_session_kwargs()` to centralize HTTP session parameters (headers, cookies, proxy, SSL, timeout)
+- Added `KeyboardInterrupt` handler — clean exit on Ctrl+C instead of traceback
+
+### v2.1
+- Added `--timeout` and `--proxy` support
+- Added `--output` and `--json` export options
 ---
 
 ## Contributing

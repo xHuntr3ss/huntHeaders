@@ -17,7 +17,7 @@ def print_banner() -> None:
     print(":                         ▄▄ ▄▄ ▄▄ ▄▄ ▄▄  ▄▄ ▄▄▄▄▄▄ ██  ██ ▄▄▄▄▄  ▄▄▄  ▄▄▄▄  ▄▄▄▄▄ ▄▄▄▄   ▄▄▄▄                         :")
     print(":                       ▚▘██▄██ ██ ██ ███▄██   ██   ██████ ██▄▄  ██▀██ ██▀██ ██▄▄  ██▄█▄ ███▄▄                         :")
     print(":                       ▞▖██ ██ ▀███▀ ██ ▀██   ██   ██  ██ ██▄▄▄ ██▀██ ████▀ ██▄▄▄ ██ ██ ▄▄██▀                         :")
-    print(":                created by @xHuntr3ss                                                       version:2.1               :")
+    print(":                created by @xHuntr3ss                                                       version:2.2               :")
     print("························································································································") 
     print(COLORS["reset"])
 
@@ -72,29 +72,28 @@ def analyze_headers(headers: CaseInsensitiveDict) -> Dict[str, Dict[str, Any]]:
 
     for header, info in SECURITY_HEADERS.items():
         current_value = headers.get(header, "not present").lower()
-        status = COLORS["red"] + "●" + COLORS["reset"]
 
-        if current_value != "not present":
-            if info["category"] in ["recommended", "optional"]:
-                if info["recommended_values"] is None:
-                    status = COLORS["green"] + "●" + COLORS["reset"]
-                elif current_value in [v.lower() for v in info["recommended_values"]]:
-                    status = COLORS["green"] + "●" + COLORS["reset"]
-                else:
-                    status = COLORS["yellow"] + "●" + COLORS["reset"]
-            elif info["category"] == "deprecated":
-                if info["recommended_values"] and current_value in [v.lower() for v in info["recommended_values"]]:
-                    status = COLORS["yellow"] + "●" + COLORS["reset"]
-                else:
-                    status = COLORS["red"] + "●" + COLORS["reset"]
+        if current_value == "not present":
+            status         = "missing"
+            status_display = COLORS["red"] + "●" + COLORS["reset"]
+        elif info["category"] == "deprecated":
+            status         = "deprecated"
+            status_display = COLORS["yellow"] + "●" + COLORS["reset"]
+        elif info["recommended_values"] is None or current_value in [v.lower() for v in info["recommended_values"]]:
+            status         = "implemented"
+            status_display = COLORS["green"] + "●" + COLORS["reset"]
+        else:
+            status         = "misconfigured"
+            status_display = COLORS["yellow"] + "●" + COLORS["reset"]
 
         if info["category"] != "deprecated" or current_value != "not present":
             results[header] = {
-                "category": info["category"],
-                "value": current_value,
+                "category":           info["category"],
+                "value":              current_value,
                 "recommended_values": info["recommended_values"],
-                "reference": info["reference"],
-                "status": status
+                "reference":          info["reference"],
+                "status":             status,
+                "status_display":     status_display,
             }
 
     return results
@@ -102,8 +101,7 @@ def analyze_headers(headers: CaseInsensitiveDict) -> Dict[str, Dict[str, Any]]:
 
 def print_summary(results: Dict[str, Dict[str, Any]]) -> None:
     col_header = 35
-    col_cat = 13
-    col_val = SUMMARY_TRUNCATE + 3
+    col_cat    = 13
 
     print(f"{'HEADER':<{col_header}} {'CATEGORY':<{col_cat}} {'ST'} {'VALUE'}")
     print("-" * 120)
@@ -112,7 +110,7 @@ def print_summary(results: Dict[str, Dict[str, Any]]) -> None:
         value = info["value"] if info["value"] and info["value"] != "not present" else "---"
         if len(value) > SUMMARY_TRUNCATE:
             value = value[:SUMMARY_TRUNCATE] + "..."
-        print(f"{header:<{col_header}} {info['category']:<{col_cat}} {info['status']} {value}")
+        print(f"{header:<{col_header}} {info['category']:<{col_cat}} {info['status_display']} {value}")
 
 
 def print_full(results: Dict[str, Dict[str, Any]]) -> None:
@@ -124,7 +122,7 @@ def print_full(results: Dict[str, Dict[str, Any]]) -> None:
 
         value_display = info["value"] if info["value"] != "not present" else "---"
 
-        print(f"{COLORS['bold']}{header}{COLORS['reset']} ({info['category']}) {info['status']}")
+        print(f"{COLORS['bold']}{header}{COLORS['reset']} ({info['category']}) {info['status_display']}")
         print(f"  Value:       {value_display}")
         if recommended:
             print(f"  Recommended: {recommended}")
@@ -145,11 +143,11 @@ def print_detail(results: Dict[str, Dict[str, Any]], header_name: str) -> None:
         return
 
     header, info = match
-    recommended = "; ".join(info["recommended_values"]) if info["recommended_values"] else "No specific recommendation"
+    recommended   = "; ".join(info["recommended_values"]) if info["recommended_values"] else "No specific recommendation"
     value_display = info["value"] if info["value"] != "not present" else "--- (not present)"
 
     print("=" * 120)
-    print(f"  {COLORS['bold']}{header}{COLORS['reset']}  {info['status']}")
+    print(f"  {COLORS['bold']}{header}{COLORS['reset']}  {info['status_display']}")
     print("-" * 120)
     print(f"  Category:    {info['category']}")
     print(f"  Value:       {value_display}")
@@ -159,25 +157,21 @@ def print_detail(results: Dict[str, Dict[str, Any]], header_name: str) -> None:
 
 
 def get_summary(results: Dict[str, Dict[str, Any]]) -> Tuple[int, int, int, int]:
-    green_bullet = COLORS["green"] + "●" + COLORS["reset"]
-    yellow_bullet = COLORS["yellow"] + "●" + COLORS["reset"]
-    red_bullet = COLORS["red"] + "●" + COLORS["reset"]
-
     total_security_headers = len([
         h for h, info in SECURITY_HEADERS.items()
         if info["category"] != "deprecated"
     ])
 
-    implemented_count = 0
+    implemented_count  = 0
     misconfigured_count = 0
-    deprecated_count = 0
+    deprecated_count   = 0
 
     for header, info in results.items():
-        if info["category"] == "deprecated":
+        if info["status"] == "deprecated":
             deprecated_count += 1
-        elif info["status"] == green_bullet:
+        elif info["status"] == "implemented":
             implemented_count += 1
-        elif info["status"] == yellow_bullet:
+        elif info["status"] == "misconfigured":
             misconfigured_count += 1
 
     missing_count = total_security_headers - implemented_count - misconfigured_count
@@ -196,26 +190,27 @@ def export_json(
     clean_results = {}
     for header, info in results.items():
         clean_results[header] = {
-            "category": info["category"],
-            "value": info["value"],
+            "category":           info["category"],
+            "status":             info["status"],
+            "value":              info["value"],
             "recommended_values": info["recommended_values"],
-            "reference": info["reference"],
+            "reference":          info["reference"],
         }
 
     output = {
         "target": url,
-        "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "date":   datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "summary": {
-            "implemented": implemented,
+            "implemented":  implemented,
             "misconfigured": misconfigured,
-            "deprecated": deprecated,
-            "missing": missing,
+            "deprecated":   deprecated,
+            "missing":      missing,
         },
         "results": clean_results,
     }
 
     with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2)
+        json.dump(output, f)
 
 
 def export_txt(
@@ -228,21 +223,21 @@ def export_txt(
     missing: int
 ) -> None:
     col_header = 35
-    col_cat = 13
+    col_cat    = 13
 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("=" * 120 + "\n")
         f.write(f"TARGET:    {url}\n")
         f.write(f"EXEC DATE: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("-" * 120 + "\n\n")
-        f.write(f"{'HEADER':<{col_header}} {'CATEGORY':<{col_cat}} VALUE\n")
+        f.write(f"{'HEADER':<{col_header}} {'CATEGORY':<{col_cat}} {'STATUS':<15} VALUE\n")
         f.write("-" * 120 + "\n")
 
         for header, info in results.items():
             value = info["value"] if info["value"] != "not present" else "---"
             if len(value) > SUMMARY_TRUNCATE:
                 value = value[:SUMMARY_TRUNCATE] + "..."
-            f.write(f"{header:<{col_header}} {info['category']:<{col_cat}} {value}\n")
+            f.write(f"{header:<{col_header}} {info['category']:<{col_cat}} {info['status']:<15} {value}\n")
 
         f.write("\n" + "=" * 120 + "\n")
         f.write(f"[RESULTS] {url}\n")
