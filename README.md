@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)
 ![License](https://img.shields.io/badge/license-GPLv3-green?style=flat-square)
-![Version](https://img.shields.io/badge/version-2.3-orange?style=flat-square)
+![Version](https://img.shields.io/badge/version-2.2-orange?style=flat-square)
 
 > CLI tool to analyze HTTP security headers of a target URL.  
 > Detects missing, misconfigured, and deprecated headers based on OWASP recommendations.
